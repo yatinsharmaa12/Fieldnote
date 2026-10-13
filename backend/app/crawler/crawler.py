@@ -555,7 +555,8 @@ async def crawl_site(
             # -------------------------------------------------
 
             if not robots.can_fetch(
-                link
+                link,
+                user_agent="SiteAgent/1.0",
             ):
 
                 registry.add(

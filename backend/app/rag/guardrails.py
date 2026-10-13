@@ -22,6 +22,10 @@ _OUTPUT_SECRET_PATTERNS = (
 )
 
 _WORD_PATTERN = re.compile(r"[a-z0-9]{3,}")
+_NUMBER_WORDS = {
+    "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+    "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10",
+}
 
 
 def contains_prompt_injection(question: str) -> bool:
@@ -49,8 +53,20 @@ def _has_supported_claims(answer: str, evidence: str) -> bool:
     if not overlap:
         return False
 
-    answer_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", answer))
-    evidence_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", evidence))
+    def normalize_number_words(value: str) -> str:
+        return re.sub(
+            r"\b(" + "|".join(_NUMBER_WORDS) + r")\b",
+            lambda match: _NUMBER_WORDS[match.group(0).lower()],
+            value,
+            flags=re.I,
+        )
+
+    normalized_answer = normalize_number_words(answer)
+    normalized_evidence = normalize_number_words(evidence)
+    answer_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", normalized_answer))
+    # Leading numbered-list markers are formatting rather than claims.
+    answer_numbers -= set(re.findall(r"(?m)^\s*(\d+)\.\s", normalized_answer))
+    evidence_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", normalized_evidence))
     return answer_numbers <= evidence_numbers
 
 
@@ -58,10 +74,14 @@ def validate_answer(answer: str, question: str, evidence: Iterable[str]) -> bool
     """Validate a generated answer without sending another prompt to an LLM."""
     if not isinstance(answer, str) or not answer.strip() or len(answer) > 12000:
         return False
-    if any(pattern.search(answer) for pattern in _OUTPUT_SECRET_PATTERNS):
-        return False
-
     evidence_text = "\n".join(item for item in evidence if item)
+    evidence_tokens = _tokens(evidence_text)
+    for index, pattern in enumerate(_OUTPUT_SECRET_PATTERNS):
+        for match in pattern.finditer(answer):
+            # Secret nouns are safe when they are present in retrieved content;
+            # instruction/meta phrases are never safe to reproduce.
+            if index != 0 or not _tokens(match.group()) <= evidence_tokens:
+                return False
     if not evidence_text:
         return False
     return _has_supported_claims(answer, evidence_text)

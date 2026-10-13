@@ -159,7 +159,7 @@ def test_answer_question_falls_back_when_provider_output_is_unsupported():
         result = answer_question("Where is the company based?", company_id=1)
 
     assert result["answer"] == "The website does not provide enough information to answer that."
-    assert result["sources"] == [{"title": "Plans", "url": "https://example.com"}]
+    assert result["sources"] == []
 
 
 def test_answer_question_deduplicates_sources_by_url():
@@ -172,7 +172,7 @@ def test_answer_question_deduplicates_sources_by_url():
     with patch("app.rag.pipeline.search_chunks", return_value=fake_results), patch(
         "app.rag.pipeline.GeminiGenerator"
     ) as mock_generator:
-        mock_generator.return_value.generate.return_value = "A synthesized answer."
+        mock_generator.return_value.generate.return_value = "First fact. Third fact."
         result = answer_question("Tell me about the company.", company_id=1)
 
     assert result["sources"] == [

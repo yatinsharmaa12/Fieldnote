@@ -23,6 +23,22 @@ def test_relevant_answer_is_supported_by_website_evidence():
     )
 
 
+def test_number_words_and_numbered_lists_are_not_rejected():
+    assert validate_answer(
+        "1. The company offers three pricing plans.",
+        "How many plans are offered?",
+        ["Our company offers 3 pricing plans."],
+    )
+
+
+def test_grounded_secret_vocabulary_is_allowed():
+    assert validate_answer(
+        "Reset your password from the account settings.",
+        "How do I reset my password?",
+        ["Reset your password from the account settings."],
+    )
+
+
 def test_unrelated_question_is_rejected_by_safe_retrieval_gate():
     assert IRRELEVANT_RESPONSE.startswith("I can only answer")
     assert NOT_FOUND_RESPONSE.startswith("The website does not provide")

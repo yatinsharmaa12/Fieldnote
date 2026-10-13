@@ -1,0 +1,7 @@
+.status-badge.timed_out {
+  background: #f7e2dc;
+}
+
+.status-badge.timed_out span {
+  background: #c4553a;
+}

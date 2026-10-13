@@ -2,7 +2,7 @@ import os
 
 import pytest
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from app.models.company import Company
 from app.models.crawl_job import CrawlJob
@@ -31,6 +31,8 @@ TestingSessionLocal = sessionmaker(
 
 @pytest.fixture
 def db():
+    with test_engine.begin() as connection:
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
     Base.metadata.create_all(bind=test_engine)
 
     session = TestingSessionLocal()

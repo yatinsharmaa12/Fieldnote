@@ -1,3 +1,5 @@
+from sqlalchemy import text
+
 from app.db.database import Base, engine
 from app.models.page_chunk import PageChunk
 from app.models.company import Company
@@ -7,6 +9,8 @@ from app.models.user import User
 from app.models.crawl_job import CrawlJob
 
 def init_db():
+    with engine.begin() as connection:
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
     Base.metadata.create_all(bind=engine)
 
 

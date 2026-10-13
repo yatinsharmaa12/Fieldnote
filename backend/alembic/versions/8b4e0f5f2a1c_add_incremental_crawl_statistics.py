@@ -18,26 +18,20 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "crawl_jobs",
-        sa.Column("pages_new", sa.Integer(), server_default="0", nullable=False),
-    )
-    op.add_column(
-        "crawl_jobs",
-        sa.Column("pages_changed", sa.Integer(), server_default="0", nullable=False),
-    )
-    op.add_column(
-        "crawl_jobs",
-        sa.Column("pages_unchanged", sa.Integer(), server_default="0", nullable=False),
-    )
-    op.add_column(
-        "crawl_jobs",
-        sa.Column("pages_deactivated", sa.Integer(), server_default="0", nullable=False),
-    )
+    inspector = sa.inspect(op.get_bind())
+    if "crawl_jobs" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("crawl_jobs")}
+    for name in ("pages_new", "pages_changed", "pages_unchanged", "pages_deactivated"):
+        if name not in columns:
+            op.add_column("crawl_jobs", sa.Column(name, sa.Integer(), server_default="0", nullable=False))
 
 
 def downgrade() -> None:
-    op.drop_column("crawl_jobs", "pages_deactivated")
-    op.drop_column("crawl_jobs", "pages_unchanged")
-    op.drop_column("crawl_jobs", "pages_changed")
-    op.drop_column("crawl_jobs", "pages_new")
+    inspector = sa.inspect(op.get_bind())
+    if "crawl_jobs" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("crawl_jobs")}
+    for name in ("pages_deactivated", "pages_unchanged", "pages_changed", "pages_new"):
+        if name in columns:
+            op.drop_column("crawl_jobs", name)

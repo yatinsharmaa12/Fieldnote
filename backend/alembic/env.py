@@ -1,6 +1,6 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
+from sqlalchemy import engine_from_config, text
 from sqlalchemy import pool
 import os
 from alembic import context
@@ -86,6 +86,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         context.configure(
             connection=connection, target_metadata=target_metadata
         )

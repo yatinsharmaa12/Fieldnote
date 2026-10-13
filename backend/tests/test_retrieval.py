@@ -83,10 +83,11 @@ def test_retrieval_filters_by_company():
 
     assert len(results) == 1
 
-    # search_chunks() should apply two filters:
+    # search_chunks() should apply three filters:
     # 1. company_id isolation
-    # 2. maximum distance
-    assert mock_query.filter.call_count == 2
+    # 2. active URL visibility
+    # 3. maximum distance
+    assert mock_query.filter.call_count == 3
 
     company_filter = mock_query.filter.call_args_list[0].args[0]
 

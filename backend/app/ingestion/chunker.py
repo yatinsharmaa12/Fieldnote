@@ -2,10 +2,18 @@ import re
 import tiktoken
 
 
-encoding = tiktoken.get_encoding("cl100k_base")
+try:
+    encoding = tiktoken.get_encoding("cl100k_base")
+except Exception:
+    # tiktoken downloads this encoding the first time it is used.  Crawls
+    # should remain available in offline workers; whitespace is a conservative
+    # fallback for the small (200-token) ingestion chunks.
+    encoding = None
 
 
 def token_count(text: str) -> int:
+    if encoding is None:
+        return len(text.split())
     return len(encoding.encode(text))
 
 
@@ -81,6 +89,23 @@ def chunk_text(
 
     chunks = []
 
+    def trailing_overlap(sentences: list[str]) -> list[str]:
+        """Keep complete trailing sentences up to the overlap token budget."""
+        if overlap_tokens <= 0:
+            return []
+        overlap: list[str] = []
+        used_tokens = 0
+        for sentence in reversed(sentences):
+            sentence_tokens = token_count(sentence)
+            if overlap and used_tokens + sentence_tokens > overlap_tokens:
+                break
+            if not overlap and sentence_tokens > overlap_tokens:
+                overlap.append(sentence)
+                break
+            overlap.append(sentence)
+            used_tokens += sentence_tokens
+        return list(reversed(overlap))
+
     for section in sections:
         sentences = []
 
@@ -122,7 +147,10 @@ def chunk_text(
                         " ".join(current_sentences)
                     )
 
-                current_sentences = [sentence]
+                current_sentences = trailing_overlap(current_sentences)
+                if token_count(" ".join(current_sentences + [sentence])) > chunk_size:
+                    current_sentences = []
+                current_sentences.append(sentence)
 
         if current_sentences:
             chunks.append(
