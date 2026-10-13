@@ -81,7 +81,6 @@ def dns_pinning():
     """Pin DNS for the duration of one fetch (validation + connect)."""
     global _pinning_depth
     _pinning_depth += 1
-    prev_getaddrinfo = socket.getaddrinfo
     socket.getaddrinfo = _patched_getaddrinfo  # type: ignore[assignment]
     try:
         yield
@@ -89,7 +88,7 @@ def dns_pinning():
         _pinning_depth -= 1
         if _pinning_depth <= 0:
             _pinning_depth = 0
-            socket.getaddrinfo = prev_getaddrinfo  # type: ignore[assignment]
+            socket.getaddrinfo = _original_getaddrinfo  # type: ignore[assignment]
             _pinned_hosts.clear()
 
 

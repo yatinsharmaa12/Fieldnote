@@ -5,7 +5,7 @@ import { ApiError, api } from "./api";
 import { useAuth } from "./auth";
 import type { ChatResponse, Company, CrawlJob } from "./types";
 
-const terminal = ["COMPLETED", "FAILED", "CANCELLED"];
+const terminal = ["COMPLETED", "FAILED", "CANCELLED", "TIMED_OUT"];
 const fmtDate = (value: string | null) => value ? new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—";
 const fmtDuration = (seconds: number | null) => seconds == null ? "—" : `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
 const errorText = (error: unknown) => error instanceof ApiError ? error.message : "The service is unavailable. Check the connection and try again.";

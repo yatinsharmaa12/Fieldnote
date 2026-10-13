@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getCrawlJob } from "../api/crawl";
 import type { CrawlJob } from "../types";
 
-const terminal = new Set(["COMPLETED", "FAILED", "CANCELLED"]);
+const terminal = new Set(["COMPLETED", "FAILED", "CANCELLED", "TIMED_OUT"]);
 export function useCrawlStatus(companyId: number | null, jobId: number | null) {
   const [job, setJob] = useState<CrawlJob | null>(null);
   const [error, setError] = useState("");

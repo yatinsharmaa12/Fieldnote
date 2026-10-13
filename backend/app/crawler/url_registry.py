@@ -42,6 +42,8 @@ class URLRegistry:
             record.status = status.value
             record.last_seen_at = now_utc_naive()
             record.last_error = None
+            if status != URLStatus.DEACTIVATED:
+                record.is_active = True
             # Preserve depth, discovered_from if already set; otherwise update
             if depth is not None:
                 record.depth = depth
@@ -115,6 +117,8 @@ class URLRegistry:
         record.status = status.value
         record.last_error = error
         record.last_seen_at = now_utc_naive()
+        if status != URLStatus.DEACTIVATED:
+            record.is_active = True
 
         if http_status is not None:
             record.http_status = http_status

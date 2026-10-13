@@ -1,7 +1,7 @@
 import type { ChatResponse, Company, CrawlJob } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
-const REQUEST_TIMEOUT_MS = 12000;
+const REQUEST_TIMEOUT_MS = 35000;
 
 export class ApiError extends Error {
   status: number;

@@ -85,6 +85,13 @@ async def run_crawl_job(
                 db.commit()
             return
 
+        except CrawlTimedOutError as error:
+            db.refresh(job)
+            if job.status != JobState.CANCELLED.value:
+                transition_job_state(job, JobState.TIMED_OUT, str(error))
+                db.commit()
+            return
+
         except RetryableCrawlError as error:
             logger.warning("Crawl job %s retryable failure: %s", job.id, error)
             transition_job_state(job, JobState.QUEUED, str(error))

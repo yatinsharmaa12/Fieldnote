@@ -63,6 +63,9 @@ def answer_question(
         )
         answer = NOT_FOUND_RESPONSE
 
+    if answer == NOT_FOUND_RESPONSE:
+        return {"answer": answer, "sources": []}
+
     sources = []
     seen_urls = set()
 

@@ -14,6 +14,9 @@ def parse_page(html: str) -> tuple[str, str]:
     for element in soup.find_all(
         ["h1", "h2", "h3", "p", "li"]
     ):
+        # A list item's text already includes paragraphs nested inside it.
+        if element.name == "p" and element.find_parent("li") is not None:
+            continue
         text = element.get_text(" ", strip=True)
 
         if not text:

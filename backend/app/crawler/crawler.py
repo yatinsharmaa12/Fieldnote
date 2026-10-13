@@ -214,10 +214,6 @@ async def crawl_site(
         if not record:
             continue
 
-        # Already indexed.
-        if record.status == URLStatus.INDEXED:
-            continue
-
         # -------------------------------------------------
         # DOMAIN CHECK
         # -------------------------------------------------
@@ -244,9 +240,7 @@ async def crawl_site(
         # ROBOTS CHECK
         # -------------------------------------------------
 
-        if not robots.can_fetch(
-            current_url
-        ):
+        if not robots.can_fetch(current_url, user_agent="SiteAgent/1.0"):
 
             registry.update_status(
                 current_url,
@@ -451,15 +445,19 @@ async def crawl_site(
         # CRAWL ERROR
         # -------------------------------------------------
 
-        except RetryableCrawlError:
+        except (CrawlTimedOutError, CrawlCancelledError):
+            # Job lifecycle transitions belong to crawl_service.
             raise
-        except ResourceLimitError as error:
-            # Permanent failure due to resource limit
-            transition_job_state(crawl_job, JobState.FAILED, str(error))
-            raise
-        except CrawlTimedOutError as error:
-            transition_job_state(crawl_job, JobState.TIMED_OUT, str(error))
-            raise
+        except (RetryableCrawlError, ResourceLimitError) as error:
+            # A failure fetching the entry point invalidates the whole run.
+            # For discovered pages, retain the error and continue the queue.
+            if current_url == start_url:
+                raise
+            logger.warning("Crawl error %s -> %s", current_url, error)
+            registry.update_status(current_url, URLStatus.FAILED, str(error))
+            if crawl_job:
+                update_crawl_progress(db, crawl_job)
+            continue
         except Exception as error:
 
             logger.warning("Crawl error %s -> %s", current_url, error)

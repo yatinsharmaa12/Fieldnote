@@ -18,7 +18,7 @@ class InvalidStateTransition(Exception):
 
 VALID_TRANSITIONS = {
     JobState.QUEUED: {JobState.RUNNING, JobState.FAILED, JobState.CANCELLED},
-    JobState.RUNNING: {JobState.COMPLETED, JobState.FAILED, JobState.QUEUED, JobState.CANCELLED},
+    JobState.RUNNING: {JobState.COMPLETED, JobState.FAILED, JobState.QUEUED, JobState.CANCELLED, JobState.TIMED_OUT},
     JobState.COMPLETED: {JobState.QUEUED},  # allow re-running completed jobs via QUEUED reset
 
     JobState.FAILED: set(),

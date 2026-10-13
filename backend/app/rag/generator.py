@@ -3,7 +3,7 @@ import logging
 
 from dotenv import load_dotenv
 from google import genai
-from google.genai.errors import ServerError
+from google.genai.errors import APIError, ClientError, ServerError
 from google.genai import types
 
 from app.rag.exceptions import LLMProviderError
@@ -30,7 +30,7 @@ class GeminiGenerator:
             ),
         )
 
-        self.model = "gemini-3.6-flash"
+        self.model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
     def generate(self, prompt: str) -> str:
         try:
@@ -38,7 +38,7 @@ class GeminiGenerator:
                 model=self.model,
                 contents=prompt,
             )
-        except ServerError as error:
+        except (APIError, ClientError, ServerError) as error:
             status_code = getattr(error, "code", None)
             if status_code is None:
                 status_code = getattr(error, "status_code", None)
@@ -53,4 +53,6 @@ class GeminiGenerator:
                 provider_status_code=status_code,
             ) from error
 
+        if response.text is None:
+            raise LLMProviderError("Empty response from language model provider.")
         return response.text

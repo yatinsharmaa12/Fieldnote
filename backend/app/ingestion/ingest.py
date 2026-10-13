@@ -64,7 +64,8 @@ def ingest_page(
 
         chunks = chunk_text(
             cleaned,
-            chunk_size=500,
+            chunk_size=200,
+            overlap_tokens=30,
         )
 
         if not chunks:

@@ -2,6 +2,7 @@ from app.db.database import SessionLocal
 from app.ingestion.embedding import EmbeddingModel
 from app.models.page_chunk import PageChunk
 from app.models.page_db import Page
+from app.models.url_db import URL
 
 
 DEFAULT_MAX_DISTANCE = 0.90
@@ -44,9 +45,11 @@ def search_chunks(
                 Page,
                 Page.id == PageChunk.page_id,
             )
+            .join(URL, URL.id == Page.url_id)
             .filter(
                 Page.company_id == company_id,
             )
+            .filter(URL.is_active.is_(True))
             .filter(
                 distance <= max_distance,
             )

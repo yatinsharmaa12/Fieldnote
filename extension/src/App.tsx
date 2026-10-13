@@ -11,7 +11,7 @@ import { companyMatchesSite } from "./utils/site";
 import type { ChatResponse, Company, CrawlJob } from "./types";
 
 type Message = { role: "user" | "assistant"; text: string; sources?: ChatResponse["sources"] };
-const terminal = new Set(["COMPLETED", "FAILED", "CANCELLED"]);
+const terminal = new Set(["COMPLETED", "FAILED", "CANCELLED", "TIMED_OUT"]);
 const errorMessage = (error: unknown) => {
   if (error instanceof ApiError) {
     if (error.status === 401) return "Your session has expired. Please sign in again.";
