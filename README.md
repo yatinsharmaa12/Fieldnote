@@ -16,7 +16,24 @@ Give it a public website, crawl the site, monitor the crawl as it runs, and ask 
 - Runs crawls through Redis and RQ with retries, cancellation, heartbeat updates, and stale-job recovery.
 - Exposes crawl statistics and duration for each execution.
 - Answers company-specific questions with Gemini and returns the supporting source URLs.
-
+ flowchart TD
+    A[User registers or logs in] --> B[JWT authentication]
+    B --> C[Create company with website URL]
+    C --> D[Queue crawl job in Redis / RQ]
+    D --> E[Fetch public HTML pages]
+    E --> F[Normalize URLs and extract text]
+    F --> G[Compute content hash]
+    G --> H{Content changed?}
+    H -->|No| I[Skip re-ingestion]
+    H -->|Yes or new| J[Chunk text and create embeddings]
+    J --> K[Store pages and chunks in PostgreSQL / pgvector]
+    I --> L[Update crawl statistics]
+    K --> L
+    L --> M[User asks a question]
+    M --> N[Company-scoped vector search]
+    N --> O[Build source context]
+    O --> P[Gemini generates answer]
+    P --> Q[Validate answer and return source URLs]
 ## Architecture
 
 ```text

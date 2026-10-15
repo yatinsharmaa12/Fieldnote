@@ -1,6 +1,8 @@
 import os
 import logging
 import atexit
+import time
+import random
 from functools import lru_cache
 from threading import Lock
 
@@ -47,12 +49,33 @@ class GeminiGenerator:
         self.model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
     def generate(self, prompt: str) -> str:
+        deadline = time.monotonic() + 30.0
         try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-                config=types.GenerateContentConfig(max_output_tokens=1024),
-            )
+            for attempt in range(3):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise httpx.TimeoutException("Provider request budget exhausted")
+                try:
+                    response = self.client.models.generate_content(
+                        model=self.model,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            max_output_tokens=1024,
+                            http_options=types.HttpOptions(
+                                timeout=max(1, int(remaining * 1000)),
+                                retry_options=types.HttpRetryOptions(attempts=1),
+                            ),
+                        ),
+                    )
+                    break
+                except APIError as error:
+                    # Retry only transient server failures, never invalid
+                    # models, authentication errors, or quota exhaustion.
+                    delay = 0.5 * (2 ** attempt) + random.uniform(0, 0.25)
+                    if error.code not in (503, 504) or attempt == 2 or deadline - time.monotonic() <= delay + 1:
+                        raise
+                    logger.info("Retrying Gemini transient failure status_code=%s attempt=%s", error.code, attempt + 2)
+                    time.sleep(delay)
         except (APIError, ClientError, ServerError, httpx.HTTPError) as error:
             status_code = getattr(error, "code", None)
             if status_code is None:
@@ -68,6 +91,8 @@ class GeminiGenerator:
                 provider_status_code=status_code,
             ) from error
 
-        if not response.text or not response.text.strip():
+        # The SDK accessor logs a warning for non-text metadata. Read it once.
+        answer = response.text
+        if not answer or not answer.strip():
             raise LLMProviderError("Empty response from language model provider.")
-        return response.text.strip()
+        return answer.strip()

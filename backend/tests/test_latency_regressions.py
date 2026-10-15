@@ -39,6 +39,8 @@ def test_provider_reuses_connections_and_does_not_multiply_timeouts(monkeypatch)
 @pytest.mark.parametrize("error", [
     httpx.ReadTimeout("private upstream detail"),
     ClientError(429, {"error": {"message": "quota secret"}}),
+    ClientError(404, {"error": {"message": "model missing"}}),
+    ClientError(403, {"error": {"message": "forbidden"}}),
 ])
 def test_provider_network_and_quota_failures_are_safe(error):
     generator = GeminiGenerator.__new__(GeminiGenerator)
@@ -47,6 +49,7 @@ def test_provider_network_and_quota_failures_are_safe(error):
     generator.client.models.generate_content.side_effect = error
     with pytest.raises(LLMProviderError, match="temporarily unavailable"):
         generator.generate("prompt")
+    generator.client.models.generate_content.assert_called_once()
 
 
 @pytest.mark.parametrize("text", [None, "", "   "])
