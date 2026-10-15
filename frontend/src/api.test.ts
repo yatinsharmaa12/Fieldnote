@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError } from "./api";
 
 describe("API contract", () => {
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => {
     sessionStorage.clear();
     vi.restoreAllMocks();
@@ -40,5 +41,52 @@ describe("API contract", () => {
   it("turns an unreachable backend into a useful connection error", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
     await expect(api.login("person@acme.com", "secret")).rejects.toEqual(expect.objectContaining({ status: 503, message: expect.stringContaining("backend") }));
+  });
+
+  it("shares identical in-flight reads without caching stale results", async () => {
+    let finish!: (response: Response) => void;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const first = api.companies();
+    const second = api.companies();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    finish(new Response("[]"));
+    await Promise.all([first, second]);
+    fetchMock.mockResolvedValueOnce(new Response("[]"));
+    await api.companies();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the chat timeout active while reading the response body", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, options) => ({
+      ok: true,
+      json: () => new Promise((_resolve, reject) => options?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")))),
+    } as Response));
+    const outcome = api.chat(3, "Question").catch(error => error);
+    await vi.advanceTimersByTimeAsync(35000);
+    expect(vi.getTimerCount()).toBe(1);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(await outcome).toMatchObject({ status: 408 });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("preserves caller cancellation instead of reporting a server error", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((_url, options) => new Promise((_resolve, reject) => options?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")))));
+    const controller = new AbortController();
+    const outcome = api.chat(3, "Question", controller.signal).catch(error => error);
+    controller.abort();
+    expect(await outcome).toMatchObject({ name: "AbortError" });
+  });
+
+  it("expires the current session and flattens validation errors", async () => {
+    sessionStorage.setItem("fieldnote_token", "expired");
+    const expired = vi.fn();
+    window.addEventListener("fieldnote:session-expired", expired, { once: true });
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response('{"detail":"Expired"}', { status: 401 }))
+      .mockResolvedValueOnce(new Response('{"detail":[{"msg":"Invalid URL"}]}', { status: 422 }));
+    await expect(api.company(3)).rejects.toMatchObject({ status: 401 });
+    expect(sessionStorage.getItem("fieldnote_token")).toBeNull();
+    expect(expired).toHaveBeenCalledOnce();
+    await expect(api.createCompany({ name: "Acme", website_url: "invalid" })).rejects.toMatchObject({ message: "Invalid URL" });
   });
 });

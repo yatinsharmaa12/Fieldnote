@@ -19,6 +19,7 @@ class PageChunk(Base):
     page_id: Mapped[int] = mapped_column(
         ForeignKey("pages.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
 
     chunk_index: Mapped[int] = mapped_column(
@@ -40,4 +41,4 @@ class PageChunk(Base):
         DateTime,
         default=now_utc_naive,
         nullable=False,
-    ) 
+    )

@@ -20,6 +20,7 @@ class CrawlJob(Base):
         Integer,
         ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
 
     status: Mapped[str] = mapped_column(

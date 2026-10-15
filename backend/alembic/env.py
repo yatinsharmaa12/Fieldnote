@@ -75,6 +75,11 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    supplied_connection = config.attributes.get("connection")
+    if supplied_connection is not None:
+        run_on_connection(supplied_connection)
+        return
+
     database_url = os.getenv("DATABASE_URL")
     if database_url:
         config.set_main_option("sqlalchemy.url", database_url)
@@ -86,13 +91,16 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        run_on_connection(connection)
 
-        with context.begin_transaction():
-            context.run_migrations()
+
+def run_on_connection(connection) -> None:
+    context.configure(connection=connection, target_metadata=target_metadata)
+    # Configure Alembic before executing SQL: otherwise SQLAlchemy autobegin
+    # makes Alembic treat the transaction as external and it rolls back on exit.
+    with context.begin_transaction():
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        context.run_migrations()
 
 
 if context.is_offline_mode():

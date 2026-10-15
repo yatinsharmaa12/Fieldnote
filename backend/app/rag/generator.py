@@ -1,5 +1,10 @@
 import os
 import logging
+import atexit
+from functools import lru_cache
+from threading import Lock
+
+import httpx
 
 from dotenv import load_dotenv
 from google import genai
@@ -12,6 +17,21 @@ from app.rag.exceptions import LLMProviderError
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+_client_lock = Lock()
+
+
+@lru_cache(maxsize=4)
+def _get_client(api_key: str):
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(
+            timeout=30000,
+            # SDK retries can multiply a 30s timeout past the UI deadline.
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
+    atexit.register(client.close)
+    return client
 
 
 class GeminiGenerator:
@@ -19,16 +39,10 @@ class GeminiGenerator:
         api_key = os.getenv("GEMINI_API_KEY")
 
         if not api_key:
-            raise ValueError(
-                "GEMINI_API_KEY is not set"
-            )
+            raise LLMProviderError("The language model provider is not configured.")
 
-        self.client = genai.Client(
-            api_key=api_key,
-            http_options=types.HttpOptions(
-                timeout=30000,
-            ),
-        )
+        with _client_lock:
+            self.client = _get_client(api_key)
 
         self.model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
@@ -37,8 +51,9 @@ class GeminiGenerator:
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt,
+                config=types.GenerateContentConfig(max_output_tokens=1024),
             )
-        except (APIError, ClientError, ServerError) as error:
+        except (APIError, ClientError, ServerError, httpx.HTTPError) as error:
             status_code = getattr(error, "code", None)
             if status_code is None:
                 status_code = getattr(error, "status_code", None)
@@ -53,6 +68,6 @@ class GeminiGenerator:
                 provider_status_code=status_code,
             ) from error
 
-        if response.text is None:
+        if not response.text or not response.text.strip():
             raise LLMProviderError("Empty response from language model provider.")
-        return response.text
+        return response.text.strip()

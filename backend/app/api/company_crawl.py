@@ -101,6 +101,7 @@ def crawl_job_response(job):
         "pages_changed": job.pages_changed,
         "pages_unchanged": job.pages_unchanged,
         "pages_deactivated": job.pages_deactivated,
+        "attempt_count": job.attempt_count,
 
         "error": sanitize_job_error(job.status, job.error),
 

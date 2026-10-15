@@ -4,6 +4,7 @@ import hashlib
 from collections import deque
 from typing import Optional
 from urllib.parse import urlparse
+from sqlalchemy import func
 
 
 logger = logging.getLogger(__name__)
@@ -34,37 +35,21 @@ def update_crawl_progress(
     db,
     crawl_job: CrawlJob,
 ):
-    urls = (
-        db.query(URL)
+    # Aggregate in PostgreSQL instead of loading every historical URL into
+    # Python on every page/discovery update.
+    counts = dict(
+        db.query(URL.status, func.count(URL.id))
         .filter(
             URL.company_id == crawl_job.company_id,
             URL.status != "deactivated",
         )
-        .all()
+        .group_by(URL.status).all()
     )
 
-    crawl_job.pages_discovered = len(urls)
-
-    crawl_job.pages_crawled = sum(
-        1
-        for url in urls
-        if url.status in {
-            "crawled",
-            "indexed",
-        }
-    )
-
-    crawl_job.pages_indexed = sum(
-        1
-        for url in urls
-        if url.status == "indexed"
-    )
-
-    crawl_job.pages_failed = sum(
-        1
-        for url in urls
-        if url.status == "failed"
-    )
+    crawl_job.pages_discovered = sum(counts.values())
+    crawl_job.pages_crawled = counts.get("crawled", 0) + counts.get("indexed", 0)
+    crawl_job.pages_indexed = counts.get("indexed", 0)
+    crawl_job.pages_failed = counts.get("failed", 0)
 
     now = now_utc_naive()
     if not crawl_job.last_heartbeat_at or (now - crawl_job.last_heartbeat_at).total_seconds() > 15:
@@ -113,6 +98,8 @@ async def crawl_site(
 
     # URLs processed during THIS crawl only.
     visited_this_crawl = set()
+    scheduled_urls = {start_url}
+    partial_crawl = False
 
     # -------------------------------------------------
     # SERVICES
@@ -134,9 +121,8 @@ async def crawl_site(
 
     await robots.load()
 
-    # Shared singleton since embedding.py caches; resolved here so an
-    # invalid/SSRF start URL fails before any heavy subsystem init.
-    embedder = EmbeddingModel()
+    # Resolve the shared model only for pages that actually need ingestion.
+    embedder = None
 
     # -------------------------------------------------
     # RESULTS
@@ -187,18 +173,6 @@ async def crawl_site(
         if current_url in visited_this_crawl:
             continue
 
-        # -------------------------------------------------
-        # DOMAIN RATE LIMITING
-        # -------------------------------------------------
-        host = urlparse(current_url).hostname
-        now = now_utc_naive()
-        last_at = last_request_at.get(host)
-        if last_at:
-            elapsed = (now - last_at).total_seconds()
-            if elapsed < DOMAIN_MIN_DELAY_SECONDS:
-                await asyncio.sleep(DOMAIN_MIN_DELAY_SECONDS - elapsed)
-        last_request_at[host] = now_utc_naive()
-
         visited_this_crawl.add(
             current_url
         )
@@ -228,6 +202,7 @@ async def crawl_site(
         # -------------------------------------------------
 
         if current_depth > max_depth:
+            partial_crawl = True
             continue
 
         # -------------------------------------------------
@@ -241,6 +216,7 @@ async def crawl_site(
         # -------------------------------------------------
 
         if not robots.can_fetch(current_url, user_agent="SiteAgent/1.0"):
+            partial_crawl = True
 
             registry.update_status(
                 current_url,
@@ -253,7 +229,19 @@ async def crawl_site(
                     crawl_job,
                 )
 
+            if current_url == start_url:
+                raise ValueError("The starting URL disallows crawling in robots.txt")
             continue
+
+        # Throttle actual requests, not URLs discarded by scope/depth/robots.
+        host = urlparse(current_url).hostname
+        now = now_utc_naive()
+        last_at = last_request_at.get(host)
+        if last_at:
+            elapsed = (now - last_at).total_seconds()
+            if elapsed < DOMAIN_MIN_DELAY_SECONDS:
+                await asyncio.sleep(DOMAIN_MIN_DELAY_SECONDS - elapsed)
+        last_request_at[host] = now_utc_naive()
 
         # -------------------------------------------------
         # MARK AS CRAWLING
@@ -350,6 +338,8 @@ async def crawl_site(
                         commit=False,
                     )
 
+                    if embedder is None:
+                        embedder = EmbeddingModel()
                     ingest_page(
                         page.id,
                         db=db,
@@ -392,6 +382,8 @@ async def crawl_site(
                             commit=False,
                         )
 
+                        if embedder is None:
+                            embedder = EmbeddingModel()
                         ingest_page(
                             page.id,
                             db=db,
@@ -423,23 +415,6 @@ async def crawl_site(
                     )
                     if crawl_job:
                         crawl_job.pages_unchanged += 1
-                    # Update URL status to reflect successful crawl of unchanged page
-                    registry.update_status(
-                        current_url,
-                        URLStatus.CRAWLED,
-                        http_status=http_status,
-                    )
-                    registry.update_status(
-                        current_url,
-                        URLStatus.INDEXED,
-                        http_status=http_status,
-                    )
-                    # Update job progress after unchanged page
-                    if crawl_job:
-                        update_crawl_progress(
-                            db,
-                            crawl_job,
-                        )
 
         # -------------------------------------------------
         # CRAWL ERROR
@@ -449,6 +424,7 @@ async def crawl_site(
             # Job lifecycle transitions belong to crawl_service.
             raise
         except (RetryableCrawlError, ResourceLimitError) as error:
+            partial_crawl = True
             # A failure fetching the entry point invalidates the whole run.
             # For discovered pages, retain the error and continue the queue.
             if current_url == start_url:
@@ -459,6 +435,7 @@ async def crawl_site(
                 update_crawl_progress(db, crawl_job)
             continue
         except Exception as error:
+            partial_crawl = True
 
             logger.warning("Crawl error %s -> %s", current_url, error)
 
@@ -491,6 +468,8 @@ async def crawl_site(
                     crawl_job,
                 )
 
+            if current_url == start_url:
+                raise
             continue
 
         # -------------------------------------------------
@@ -540,6 +519,9 @@ async def crawl_site(
         # -------------------------------------------------
 
         for link in links:
+            if link in scheduled_urls:
+                continue
+            scheduled_urls.add(link)
 
             # -------------------------------------------------
             # FILE / URL FILTER
@@ -558,6 +540,7 @@ async def crawl_site(
                 link,
                 user_agent="SiteAgent/1.0",
             ):
+                partial_crawl = True
 
                 registry.add(
                     link,
@@ -602,6 +585,8 @@ async def crawl_site(
                         next_depth,
                     )
                 )
+            else:
+                partial_crawl = True
 
         # -------------------------------------------------
         # UPDATE PROGRESS AFTER DISCOVERY
@@ -624,7 +609,11 @@ async def crawl_site(
         )
 
     # Deactivate URLs not seen in this crawl (soft delete)
-    deactivated_count = registry.deactivate_unseen(cutoff=crawl_start_time)
+    # A limited or failed traversal cannot establish that an old page vanished.
+    deactivated_count = (
+        registry.deactivate_unseen(cutoff=crawl_start_time)
+        if not queue and not partial_crawl else 0
+    )
     if crawl_job:
         crawl_job.pages_deactivated += deactivated_count
         db.commit()

@@ -19,11 +19,13 @@ class Page(Base):
     company_id: Mapped[int] = mapped_column(
         ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
 
     url_id: Mapped[int] = mapped_column(
         ForeignKey("urls.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
 
     url: Mapped[str] = mapped_column(

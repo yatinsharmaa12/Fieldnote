@@ -18,7 +18,7 @@ class RobotsChecker:
         self.base_url = base_url.rstrip("/")
         self.robots_url = urljoin(
             self.base_url + "/",
-            "robots.txt",
+            "/robots.txt",
         )
 
         self.parser = RobotFileParser()
@@ -39,6 +39,7 @@ class RobotsChecker:
                 async with httpx.AsyncClient(
                     follow_redirects=True,
                     timeout=10.0,
+                    headers={"User-Agent": "SiteAgent/1.0"},
                     event_hooks={"request": [_check_ssrf]},
                 ) as client:
                     response = await client.get(self.robots_url)
@@ -47,6 +48,8 @@ class RobotsChecker:
                         self.parser.parse(
                             response.text.splitlines()
                         )
+                    elif response.status_code in {401, 403}:
+                        self.parser.parse(["User-agent: *", "Disallow: /"])
                     else:
                         self.parser.parse([])
 

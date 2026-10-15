@@ -209,7 +209,7 @@ def test_crawl_job_response_duration_for_completed_and_running_jobs():
         "pages_indexed": 1, "pages_failed": 0, "pages_new": 1,
         "pages_changed": 0, "pages_unchanged": 0, "pages_deactivated": 0,
         "error": None, "created_at": None, "started_at": completed.started_at,
-        "completed_at": None,
+        "completed_at": None, "attempt_count": 1,
     })
     with patch(
         "app.api.company_crawl.now_utc_naive",

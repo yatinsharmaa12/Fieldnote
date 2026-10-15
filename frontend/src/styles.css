@@ -4,3 +4,22 @@
 @media(max-width:620px){.app-shell{display:block}.sidebar{width:100%;height:auto;padding:16px 20px;flex-direction:row;align-items:center;border-right:0;border-bottom:1px solid var(--line)}.side-label,.sidebar .side-link:not(.side-button),.status-dot{display:none}.sidebar-bottom{margin-left:auto}.side-button{padding:6px;width:auto;font-size:0}.side-button svg{display:block}.main-content{padding:27px 18px 48px}.topbar{align-items:flex-start;gap:16px;flex-direction:column;margin-bottom:27px}.topbar h1{font-size:32px}.hero-strip{padding:24px;min-height:220px;display:block}.hero-strip h2{font-size:28px}.hero-stamp{margin-top:28px}.company-grid{grid-template-columns:1fr}.history-head{display:none}.history-row{grid-template-columns:1fr 1fr 20px;gap:10px;padding:15px 7px}.history-row>span:nth-child(2),.history-row>span:nth-child(4){display:none}.stats-grid{grid-template-columns:repeat(2,1fr)}.incremental-grid{grid-template-columns:repeat(2,1fr)}.drawer{padding:25px 20px}.login-page{display:block}.login-art{min-height:37vh;padding:28px 25px}.art-copy{margin:40px 0 0}.art-copy h1{font-size:38px;letter-spacing:-2px;margin:13px 0}.art-copy p{display:none}.art-foot{margin-top:auto}.login-form-wrap{min-height:63vh;padding:35px 25px;align-items:flex-start}.login-form .brand{display:none}}
  .auth-switch{color:var(--muted);font-size:12px;text-align:center;margin:20px 0 0}.auth-switch a{color:var(--ink);font-weight:600;text-decoration:underline;text-underline-offset:3px}
 .status-badge.timed_out{background:#f7e2dc}.status-badge.timed_out span{background:#c4553a}
+
+/* Responsive interaction states and keyboard navigation. */
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #52715a;outline-offset:3px}
+button:disabled{cursor:not-allowed}
+.asked-question{margin:12px 0 20px;padding:14px;background:#f0ece4;border-radius:7px}
+.asked-question p{margin:6px 0 0;line-height:1.5;overflow-wrap:anywhere}
+.answer-text{white-space:pre-wrap;overflow-wrap:anywhere}
+.answer-progress{display:flex;align-items:center;gap:12px;padding:22px 0;min-height:110px;font-size:13px;line-height:1.6;color:var(--muted)}
+.answer-progress .spinner{flex:none}
+.answer-progress .text-button{margin-left:auto;flex:none}
+.question-suggestions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.question-suggestions button{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:16px;padding:7px 11px;font-size:11px;text-align:left}
+.question-suggestions button:hover{background:#edf1e9}
+.chat-panel .alert{margin-top:14px;line-height:1.6}
+.chat-panel .alert button{margin-left:8px}
+.chat-input input{min-width:0}
+.drawer,.modal{animation:appear .16s ease-out}
+@keyframes appear{from{opacity:.5;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}

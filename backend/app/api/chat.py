@@ -49,10 +49,14 @@ def chat(
             detail="Company not found",
         )
 
+    company_id = company.id
+    # Release the auth/ownership transaction's pooled connection before the
+    # potentially slow model call. Retrieval owns its own short-lived session.
+    db.close()
     try:
         return answer_question(
             question=request.question,
-            company_id=company.id,
+            company_id=company_id,
         )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error))

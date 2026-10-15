@@ -63,9 +63,10 @@ def _has_supported_claims(answer: str, evidence: str) -> bool:
 
     normalized_answer = normalize_number_words(answer)
     normalized_evidence = normalize_number_words(evidence)
-    answer_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", normalized_answer))
     # Leading numbered-list markers are formatting rather than claims.
-    answer_numbers -= set(re.findall(r"(?m)^\s*(\d+)\.\s", normalized_answer))
+    # Strip only the marker occurrence, not the same number in factual prose.
+    normalized_answer = re.sub(r"(?m)^\s*\d+\.\s+", "", normalized_answer)
+    answer_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", normalized_answer))
     evidence_numbers = set(re.findall(r"\b\d+(?:\.\d+)?\b", normalized_evidence))
     return answer_numbers <= evidence_numbers
 

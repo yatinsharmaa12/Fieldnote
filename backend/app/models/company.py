@@ -18,6 +18,7 @@ class Company(Base):
     owner_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"),
         nullable=False,
+        index=True,
     )
 
     name: Mapped[str] = mapped_column(

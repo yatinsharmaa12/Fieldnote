@@ -45,6 +45,7 @@ def transition_job_state(job, new_status: str, error: str = None):
         job.last_heartbeat_at = None
     
     if new_state == JobState.RUNNING:
+        job.error = None
         if current_status == JobState.QUEUED:
             job.attempt_count += 1
         job.started_at = now_utc_naive()

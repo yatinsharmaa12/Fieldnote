@@ -31,6 +31,14 @@ def test_number_words_and_numbered_lists_are_not_rejected():
     )
 
 
+def test_list_number_does_not_whitelist_an_unsupported_numeric_claim():
+    assert not validate_answer(
+        "1. The company has 1 office.",
+        "How many offices?",
+        ["The company has three offices."],
+    )
+
+
 def test_grounded_secret_vocabulary_is_allowed():
     assert validate_answer(
         "Reset your password from the account settings.",

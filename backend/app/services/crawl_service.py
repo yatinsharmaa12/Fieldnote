@@ -73,6 +73,9 @@ async def run_crawl_job(
 
             job.pages_crawled = len(pages)
 
+            db.refresh(job, attribute_names=["status"])
+            if job.status == JobState.CANCELLED.value:
+                return
             transition_job_state(job, JobState.COMPLETED)
 
             db.commit()
@@ -93,6 +96,10 @@ async def run_crawl_job(
             return
 
         except RetryableCrawlError as error:
+            db.rollback()
+            db.refresh(job)
+            if job.status == JobState.CANCELLED.value:
+                return
             logger.warning("Crawl job %s retryable failure: %s", job.id, error)
             transition_job_state(job, JobState.QUEUED, str(error))
             db.commit()
@@ -100,6 +107,7 @@ async def run_crawl_job(
 
         except Exception as error:
             logger.exception("Crawl job %s failed", job.id)
+            db.rollback()
             db.refresh(job)
             if job.status != JobState.CANCELLED.value:
                 transition_job_state(job, JobState.FAILED, str(error))

@@ -40,8 +40,8 @@ describe("authenticated product shell", () => {
     await screen.findByText("Queued");
     await screen.findByText("Open crawl details");
     await user.click(await screen.findByText("Open crawl details"));
-    expect(await screen.findByText("Completed")).toBeInTheDocument();
-    expect(api.crawlJob).toHaveBeenCalledWith(3, 8);
+    expect(await screen.findByRole("heading", { name: "Completed" })).toBeInTheDocument();
+    expect(api.crawlJob).toHaveBeenCalledWith(3, 8, expect.any(AbortSignal));
   });
 });
 

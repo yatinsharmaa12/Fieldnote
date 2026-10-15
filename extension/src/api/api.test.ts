@@ -1,14 +1,43 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { login, logout } from "./auth";
 import { askCompany, uniqueSources } from "./chat";
 import { createCompany } from "./companies";
 import { cancelCrawl, getCrawlJob, startCrawl } from "./crawl";
-import { ApiError } from "./client";
+import { ApiError, request } from "./client";
 
 const storage = new Map<string, unknown>();
 beforeEach(() => { storage.clear(); vi.restoreAllMocks(); (globalThis as any).chrome = { storage: { local: { get: vi.fn(async (key: string) => ({ [key]: storage.get(key) })), set: vi.fn(async (value: Record<string, unknown>) => Object.entries(value).forEach(([key, value]) => storage.set(key, value))), remove: vi.fn(async (key: string) => storage.delete(key)) } } }; });
 
 describe("extension API client", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("allows a slow chat body up to 45 seconds and then times out", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, options) => ({
+      ok: true,
+      json: () => new Promise((_resolve, reject) => options?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")))),
+    } as Response));
+    const outcome = askCompany(3, "Question").catch(error => error);
+    await vi.advanceTimersByTimeAsync(35000);
+    expect(vi.getTimerCount()).toBe(1);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(await outcome).toMatchObject({ status: 408 });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("does not send a request that was already cancelled", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const controller = new AbortController(); controller.abort();
+    await expect(askCompany(3, "Question", controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not expire a newer session when revoking an old token", async () => {
+    storage.set("fieldnote_token", "new-session");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response('{"detail":"Expired"}', { status: 401 }));
+    await expect(request("/auth/logout", { method: "POST", headers: { Authorization: "Bearer old-session" } })).rejects.toMatchObject({ status: 401 });
+    expect(storage.get("fieldnote_token")).toBe("new-session");
+  });
   it("stores login tokens and supports logout", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ access_token: "jwt" }), { status: 200 }));
     await login("user@example.com", "secret");

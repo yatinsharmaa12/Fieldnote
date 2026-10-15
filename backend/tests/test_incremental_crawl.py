@@ -14,6 +14,14 @@ from app.services.crawl_service import run_crawl_job
 from app.models.url import URLStatus
 from app.models.url_db import URL
 
+
+@pytest.fixture(autouse=True)
+def local_robots(monkeypatch):
+    async def load(checker):
+        checker.parser.parse([])
+        checker.loaded = True
+    monkeypatch.setattr("app.crawler.robots.RobotsChecker.load", load)
+
 # Helper to get URL record from DB
 def get_url_record(db, company_id, url):
     return (
@@ -93,6 +101,7 @@ async def test_incremental_crawl_unchanged_content(db, test_session_local):
     url_rec2 = get_url_record(db, company.id, "https://example.com")
     assert url_rec2.last_seen_at > first_seen
     assert url_rec2.status == URLStatus.INDEXED.value
+    assert url_rec2.crawl_count == 2
 
     async def mock_fetch_changed(url):
         return "<html><body>content v2</body></html>", 200
@@ -113,7 +122,9 @@ async def test_incremental_crawl_unchanged_content(db, test_session_local):
     assert completed_job.pages_unchanged == 0
 
 @pytest.mark.anyio
-async def test_deactivate_unseen_urls(db, test_session_local):
+async def test_depth_limited_crawl_preserves_discovered_urls(db, test_session_local, monkeypatch):
+    sleep = AsyncMock()
+    monkeypatch.setattr("app.crawler.crawler.asyncio.sleep", sleep)
     # Setup user, company, and crawl job with depth 0 so a discovered link is not visited
     user = User(email="deact-test@example.com", password_hash="unused")
     db.add(user)
@@ -153,10 +164,12 @@ async def test_deactivate_unseen_urls(db, test_session_local):
     db.expire_all()
     unused_url = get_url_record(db, company.id, "https://example.com/unused")
     assert unused_url is not None
-    assert unused_url.status == URLStatus.DEACTIVATED.value
-    assert unused_url.is_active is False
+    assert unused_url.status == URLStatus.QUEUED.value
+    assert unused_url.is_active is True
+    assert unused_url.last_seen_at is not None
     completed_job = db.query(CrawlJob).filter(CrawlJob.id == job.id).first()
-    assert completed_job.pages_deactivated == 1
+    assert completed_job.pages_deactivated == 0
+    sleep.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -286,3 +299,4 @@ async def test_failed_fetch_does_not_increment_successful_statistics(db, test_se
     assert failed_job.pages_new == 0
     assert failed_job.pages_changed == 0
     assert failed_job.pages_unchanged == 0
+    assert failed_job.status == "FAILED"
