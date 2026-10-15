@@ -33,6 +33,13 @@ def test_valid_transitions():
     assert job.completed_at is not None
     assert job.error == "Error message"
 
+    # RUNNING -> TIMED_OUT
+    job = MockJob(JobState.RUNNING.value)
+    transition_job_state(job, JobState.TIMED_OUT, "Crawl exceeded its limit")
+    assert job.status == JobState.TIMED_OUT.value
+    assert job.completed_at is not None
+    assert job.error == "Crawl exceeded its limit"
+
     # RUNNING -> QUEUED
     job = MockJob(JobState.RUNNING.value)
     transition_job_state(job, JobState.QUEUED, "Transient error")

@@ -1,6 +1,8 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from app.crawler.ssrf import validate_url_safety, SSRFError, is_safe_ip
+import socket
+
+from app.crawler.ssrf import dns_pinning, validate_url_safety, SSRFError, is_safe_ip
 from app.crawler.fetcher import fetch_page
 from app.crawler.exceptions import ResourceLimitError
 
@@ -16,6 +18,15 @@ def test_is_safe_ip():
     assert is_safe_ip("172.16.0.1") is False
     assert is_safe_ip("169.254.169.254") is False
     assert is_safe_ip("224.0.0.1") is False # multicast
+
+
+def test_nested_dns_pinning_restores_the_real_resolver():
+    original = socket.getaddrinfo
+    with dns_pinning():
+        with dns_pinning():
+            assert socket.getaddrinfo is not original
+        assert socket.getaddrinfo is not original
+    assert socket.getaddrinfo is original
 
 
 @patch("app.crawler.ssrf.resolve_hostname")
